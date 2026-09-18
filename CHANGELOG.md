@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.1.4] - 2026-09-18
+
+- Confirm successful code 6 uploads using newly written SteamPipe BuildOutput logs and their BuildID.
+- Decode redirected SteamCMD output as UTF-8 on Windows to prevent Japanese text corruption.
+
 ## [0.1.3] - 2026-09-18
 
 - Use Unity PlayerSettings.productName for the default Windows executable and macOS app bundle names.

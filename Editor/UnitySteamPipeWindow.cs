@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
@@ -1191,6 +1192,9 @@ $@"""AppBuild""
         var steamCmdOutput =
             new StringBuilder();
 
+        DateTime uploadStartedUtc =
+            DateTime.UtcNow;
+
         int exitCode =
             await RunProcessAsync(
                 fileName,
@@ -1223,16 +1227,30 @@ $@"""AppBuild""
                 steamCmdOutput.ToString();
         }
 
-        if (exitCode == 6 &&
-            OutputConfirmsCompletedBuild(
-                capturedOutput))
+        if (exitCode == 6)
         {
-            AppendLog(
-                "SteamPipe upload finished. " +
-                "SteamCMD returned code 6 after reporting a completed build; " +
-                "another Steam login session may be active.");
+            if (OutputConfirmsCompletedBuild(
+                    capturedOutput))
+            {
+                AppendLog(
+                    "SteamPipe upload finished. " +
+                    "SteamCMD returned code 6 after reporting a completed build.");
 
-            return true;
+                return true;
+            }
+
+            if (TryConfirmCompletedBuildFromOutputLogs(
+                    uploadStartedUtc,
+                    out string buildId,
+                    out string buildLogPath))
+            {
+                AppendLog(
+                    $"SteamPipe upload finished. BuildID {buildId} " +
+                    "was confirmed in the SteamPipe BuildOutput log " +
+                    $"despite SteamCMD exit code 6: {buildLogPath}");
+
+                return true;
+            }
         }
 
         AppendLog(
@@ -1257,7 +1275,123 @@ $@"""AppBuild""
             ||
             output.IndexOf(
                 "app build complete",
+                StringComparison.OrdinalIgnoreCase) >= 0
+            ||
+            output.IndexOf(
+                "successfully finished appid",
+                StringComparison.OrdinalIgnoreCase) >= 0
+            ||
+            output.IndexOf(
+                "app build successful",
                 StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private bool TryConfirmCompletedBuildFromOutputLogs(
+        DateTime uploadStartedUtc,
+        out string buildId,
+        out string buildLogPath)
+    {
+        buildId = string.Empty;
+        buildLogPath = string.Empty;
+
+        if (!Directory.Exists(OutputPath) ||
+            string.IsNullOrWhiteSpace(appId))
+        {
+            return false;
+        }
+
+        DateTime earliestRelevantWriteUtc =
+            uploadStartedUtc.AddSeconds(-5d);
+
+        IEnumerable<string> candidatePaths;
+
+        try
+        {
+            candidatePaths =
+                Directory.EnumerateFiles(
+                    OutputPath,
+                    "*",
+                    SearchOption.AllDirectories)
+                .Where(path =>
+                    File.GetLastWriteTimeUtc(path) >=
+                    earliestRelevantWriteUtc)
+                .OrderByDescending(
+                    File.GetLastWriteTimeUtc)
+                .ToArray();
+        }
+        catch (Exception exception)
+        {
+            AppendLog(
+                "SteamPipe BuildOutput logs could not be enumerated: " +
+                exception.Message);
+
+            return false;
+        }
+
+        string escapedAppId =
+            Regex.Escape(appId.Trim());
+
+        var appIdPattern =
+            new Regex(
+                $@"\bAppID\s*[:=]?\s*{escapedAppId}\b",
+                RegexOptions.IgnoreCase);
+
+        var buildIdPattern =
+            new Regex(
+                @"\bBuildID\s*[:=]?\s*(\d+)\b",
+                RegexOptions.IgnoreCase);
+
+        foreach (string path in candidatePaths)
+        {
+            string content;
+
+            try
+            {
+                using var stream =
+                    new FileStream(
+                        path,
+                        FileMode.Open,
+                        FileAccess.Read,
+                        FileShare.ReadWrite | FileShare.Delete);
+
+                using var reader =
+                    new StreamReader(
+                        stream,
+                        Encoding.UTF8,
+                        true);
+
+                content =
+                    reader.ReadToEnd();
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (!appIdPattern.IsMatch(content) ||
+                !OutputConfirmsCompletedBuild(content))
+            {
+                continue;
+            }
+
+            Match buildIdMatch =
+                buildIdPattern.Match(content);
+
+            if (!buildIdMatch.Success)
+            {
+                continue;
+            }
+
+            buildId =
+                buildIdMatch.Groups[1].Value;
+
+            buildLogPath =
+                path;
+
+            return true;
+        }
+
+        return false;
     }
 
     private async Task<bool> SignAndNotarizeMacBuildAsync()
@@ -1775,7 +1909,13 @@ $@"""AppBuild""
                             true,
 
                         CreateNoWindow =
-                            true
+                            true,
+
+                        StandardOutputEncoding =
+                            Encoding.UTF8,
+
+                        StandardErrorEncoding =
+                            Encoding.UTF8
                     },
 
                 EnableRaisingEvents =
