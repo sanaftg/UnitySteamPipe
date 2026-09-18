@@ -35,8 +35,13 @@ public sealed class UnitySteamPipeWindow : EditorWindow
 
     private const string DefaultAppId = "";
     private const string DefaultDepotId = "";
-    private const string DefaultExeName = "Game.exe";
-    private const string DefaultMacAppName = "Game.app";
+    private const string FallbackProductName = "Game";
+
+    private static string DefaultExeName =>
+        GetDefaultProductName() + ".exe";
+
+    private static string DefaultMacAppName =>
+        GetDefaultProductName() + ".app";
 
     private const string DefaultEntitlementsPath =
         "Packages/net.f-tg.unity-steampipe/Editor/Steam/Steam.entitlements";
@@ -266,6 +271,16 @@ public sealed class UnitySteamPipeWindow : EditorWindow
                 true);
 
         buildDescription = CreateDefaultBuildDescription();
+    }
+
+    private static string GetDefaultProductName()
+    {
+        string productName =
+            PlayerSettings.productName?.Trim();
+
+        return string.IsNullOrEmpty(productName)
+            ? FallbackProductName
+            : productName;
     }
 
     private static string CreateDefaultBuildDescription()

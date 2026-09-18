@@ -1,6 +1,6 @@
 {
   "name": "net.f-tg.unity-steampipe",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "displayName": "Unity SteamPipe",
   "description": "Unity Editor tools for building desktop players and uploading them through SteamPipe, including macOS signing and notarization.",
   "unity": "2022.3",

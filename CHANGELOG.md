@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.1.3] - 2026-09-18
+
+- Use Unity PlayerSettings.productName for the default Windows executable and macOS app bundle names.
+- Fall back to Game only when the Unity product name is empty.
+
 ## [0.1.2] - 2026-09-18
 
 - Added Unity meta files for all package assets and folders so Git-based immutable packages import correctly.
