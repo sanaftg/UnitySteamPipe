@@ -63,7 +63,7 @@ public sealed class UnitySteamPipeWindow : EditorWindow
     private string buildPath = "";
 
     [SerializeField]
-    private string executableName = DefaultExeName;
+    private string executableName = "";
 
     [SerializeField]
     private string buildDescription = "";
@@ -87,7 +87,7 @@ public sealed class UnitySteamPipeWindow : EditorWindow
     private string macBuildPath = "";
 
     [SerializeField]
-    private string macAppName = DefaultMacAppName;
+    private string macAppName = "";
 
     [SerializeField]
     private string signingIdentity = "";

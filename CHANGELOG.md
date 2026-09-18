@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.1.5] - 2026-09-18
+
+- Read PlayerSettings.productName only from OnEnable defaults, avoiding ScriptableObject constructor access.
+
 ## [0.1.4] - 2026-09-18
 
 - Confirm successful code 6 uploads using newly written SteamPipe BuildOutput logs and their BuildID.
