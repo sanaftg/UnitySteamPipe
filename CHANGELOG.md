@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.1.2] - 2026-09-18
+
+- Added Unity meta files for all package assets and folders so Git-based immutable packages import correctly.
+
 ## [0.1.1] - 2026-09-18
 
 - Treat SteamCMD exit code 6 as a successful upload only when its output confirms that the app build completed.
