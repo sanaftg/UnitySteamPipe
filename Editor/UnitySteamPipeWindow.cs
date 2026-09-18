@@ -1173,13 +1173,24 @@ $@"""AppBuild""
         AppendLog(
             "SteamCMD upload start...");
 
+        var steamCmdOutput =
+            new StringBuilder();
+
         int exitCode =
             await RunProcessAsync(
                 fileName,
                 arguments,
                 Path.GetDirectoryName(
                     SteamCmdPath)
-                ?? string.Empty);
+                ?? string.Empty,
+                line =>
+                {
+                    lock (steamCmdOutput)
+                    {
+                        steamCmdOutput.AppendLine(
+                            line);
+                    }
+                });
 
         if (exitCode == 0)
         {
@@ -1189,10 +1200,49 @@ $@"""AppBuild""
             return true;
         }
 
+        string capturedOutput;
+
+        lock (steamCmdOutput)
+        {
+            capturedOutput =
+                steamCmdOutput.ToString();
+        }
+
+        if (exitCode == 6 &&
+            OutputConfirmsCompletedBuild(
+                capturedOutput))
+        {
+            AppendLog(
+                "SteamPipe upload finished. " +
+                "SteamCMD returned code 6 after reporting a completed build; " +
+                "another Steam login session may be active.");
+
+            return true;
+        }
+
         AppendLog(
             $"SteamCMD exited with code {exitCode}.");
 
         return false;
+    }
+
+    private static bool OutputConfirmsCompletedBuild(
+        string output)
+    {
+        if (string.IsNullOrWhiteSpace(
+                output))
+        {
+            return false;
+        }
+
+        return
+            output.IndexOf(
+                "build finished successfully",
+                StringComparison.OrdinalIgnoreCase) >= 0
+            ||
+            output.IndexOf(
+                "app build complete",
+                StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     private async Task<bool> SignAndNotarizeMacBuildAsync()
@@ -1673,10 +1723,17 @@ $@"""AppBuild""
     private Task<int> RunProcessAsync(
         string fileName,
         string arguments,
-        string workingDirectory)
+        string workingDirectory,
+        Action<string> outputObserver = null)
     {
         var completion =
             new TaskCompletionSource<int>();
+
+        var outputCompleted =
+            new TaskCompletionSource<bool>();
+
+        var errorCompleted =
+            new TaskCompletionSource<bool>();
 
         var process =
             new Process
@@ -1713,11 +1770,21 @@ $@"""AppBuild""
         process.OutputDataReceived +=
             (_, e) =>
             {
-                if (string.IsNullOrEmpty(
-                        e.Data))
+                if (e.Data == null)
+                {
+                    outputCompleted.TrySetResult(
+                        true);
+
+                    return;
+                }
+
+                if (e.Data.Length == 0)
                 {
                     return;
                 }
+
+                outputObserver?.Invoke(
+                    e.Data);
 
                 EditorApplication.delayCall +=
                     () =>
@@ -1728,11 +1795,21 @@ $@"""AppBuild""
         process.ErrorDataReceived +=
             (_, e) =>
             {
-                if (string.IsNullOrEmpty(
-                        e.Data))
+                if (e.Data == null)
+                {
+                    errorCompleted.TrySetResult(
+                        true);
+
+                    return;
+                }
+
+                if (e.Data.Length == 0)
                 {
                     return;
                 }
+
+                outputObserver?.Invoke(
+                    e.Data);
 
                 EditorApplication.delayCall +=
                     () =>
@@ -1742,8 +1819,12 @@ $@"""AppBuild""
             };
 
         process.Exited +=
-            (_, _) =>
+            async (_, _) =>
             {
+                await Task.WhenAll(
+                    outputCompleted.Task,
+                    errorCompleted.Task);
+
                 int exitCode =
                     process.ExitCode;
 
