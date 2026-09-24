@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.1.6] - 2026-09-24
+
+- Refresh the generated Steam build description after a successful Unity build.
+- Ensure the complete build-and-upload pipeline writes the post-build version and timestamp to the VDF.
+
 ## [0.1.5] - 2026-09-18
 
 - Read PlayerSettings.productName only from OnEnable defaults, avoiding ScriptableObject constructor access.

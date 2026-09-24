@@ -913,6 +913,12 @@ public sealed class UnitySteamPipeWindow : EditorWindow
             $"Build succeeded: " +
             $"{report.summary.totalSize / (1024f * 1024f):F1} MB");
 
+        buildDescription =
+            CreateDefaultBuildDescription();
+
+        AppendLog(
+            $"Build description updated: {buildDescription}");
+
         RemoveSteamAppIdTxt();
 
         AssetDatabase.Refresh();
