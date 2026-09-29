@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.1.9] - 2026-09-30
+
+- Run LAN-requested Git Fetch and Git Pull through GitHub SSH authentication without changing the configured origin URL.
+- Report a clear setup hint when GitHub SSH authentication fails.
+
 ## [0.1.8] - 2026-09-29
 
 - Discover other Unity SteamPipe editors on the local network.

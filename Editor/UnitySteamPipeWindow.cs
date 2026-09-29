@@ -1115,18 +1115,16 @@ public sealed class UnitySteamPipeWindow : EditorWindow
             {
                 case "git-fetch":
                     succeeded =
-                        await RunProcessAsync(
-                            "git",
+                        await RunLanGitCommandAsync(
                             "fetch --all --prune",
-                            projectRoot) == 0;
+                            projectRoot);
                     break;
 
                 case "git-pull":
                     succeeded =
-                        await RunProcessAsync(
-                            "git",
+                        await RunLanGitCommandAsync(
                             "pull --ff-only",
-                            projectRoot) == 0;
+                            projectRoot);
                     break;
 
                 case "build":
@@ -1161,6 +1159,33 @@ public sealed class UnitySteamPipeWindow : EditorWindow
                 $"LAN {actionLabel}",
                 succeeded);
         }
+    }
+
+    private async Task<bool> RunLanGitCommandAsync(
+        string arguments,
+        string projectRoot)
+    {
+        AppendLog(
+            "LAN Git uses SSH authentication for GitHub.");
+
+        string githubSshRewrite =
+            QuoteArgument(
+                "url.git@github.com:.insteadOf=https://github.com/");
+
+        int exitCode =
+            await RunProcessAsync(
+                "git",
+                $"-c {githubSshRewrite} {arguments}",
+                projectRoot);
+
+        if (exitCode != 0)
+        {
+            AppendLog(
+                "Git SSH failed. Confirm that this device has a GitHub SSH key " +
+                "and that 'ssh -T git@github.com' succeeds.");
+        }
+
+        return exitCode == 0;
     }
 
     private static string GetLanActionLabel(

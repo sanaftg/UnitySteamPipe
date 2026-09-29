@@ -34,6 +34,8 @@ https://github.com/sanaftg/UnitySteamPipe.git
 
 受信は初期状態では無効です。探索にはUDP `43817`、操作要求には既定でTCP `43818`を使用します。OSのファイアウォールでUnity Editorのローカルネットワーク通信を許可してください。
 
+LAN経由のGit操作は非対話実行のためGitHub SSH認証を使用します。各受信端末でSSHキーをGitHubへ登録し、`ssh -T git@github.com`が成功する状態にしてください。リポジトリの`origin`設定自体は変更しません。
+
 ### macOS
 
 macOS版ではDeveloper ID Application証明書と、`notarytool store-credentials` で作成したKeychain Profileが必要です。付属の `Editor/Steam/Steam.entitlements` を初期値として使用します。
