@@ -98,7 +98,22 @@ public sealed class UnitySteamPipeWindow : EditorWindow
     [SerializeField]
     private string entitlementsPath = DefaultEntitlementsPath;
 
+    [SerializeField]
+    private bool lanReceiverEnabled;
+
+    [SerializeField]
+    private string lanDeviceName = "";
+
+    [SerializeField]
+    private string lanSharedKey = "";
+
+    [SerializeField]
+    private int lanCommandPort = 43818;
+
     private Vector2 scroll;
+    private int selectedLanDeviceIndex;
+    private string lanRequestStatus = "";
+    private double nextLanDiscoveryTime;
     private string logText = "";
     private bool isBusy;
 
@@ -271,7 +286,64 @@ public sealed class UnitySteamPipeWindow : EditorWindow
                 PrefPrefix + "NotifyWhenFinished",
                 true);
 
+        lanReceiverEnabled =
+            EditorPrefs.GetBool(
+                PrefPrefix + "LanReceiverEnabled",
+                false);
+
+        lanDeviceName =
+            EditorPrefs.GetString(
+                PrefPrefix + "LanDeviceName",
+                Environment.MachineName);
+
+        lanSharedKey =
+            EditorPrefs.GetString(
+                PrefPrefix + "LanSharedKey",
+                "");
+
+        lanCommandPort =
+            EditorPrefs.GetInt(
+                PrefPrefix + "LanCommandPort",
+                43818);
+
+        string lanDeviceId =
+            EditorPrefs.GetString(
+                PrefPrefix + "LanDeviceId",
+                "");
+
+        if (string.IsNullOrWhiteSpace(
+                lanDeviceId))
+        {
+            lanDeviceId =
+                Guid.NewGuid().ToString("N");
+
+            EditorPrefs.SetString(
+                PrefPrefix + "LanDeviceId",
+                lanDeviceId);
+        }
+
         buildDescription = CreateDefaultBuildDescription();
+
+        SteamPipeLan.CommandReceived +=
+            HandleLanCommand;
+
+        SteamPipeLan.DevicesChanged +=
+            Repaint;
+
+        SteamPipeLan.Start(
+            lanDeviceId,
+            lanDeviceName,
+            Application.platform.ToString(),
+            Path.GetFileName(
+                Path.GetFullPath(
+                    Path.Combine(
+                        Application.dataPath,
+                        ".."))));
+
+        ConfigureLanReceiver();
+
+        EditorApplication.delayCall +=
+            SteamPipeLan.Refresh;
     }
 
     private static string GetDefaultProductName()
@@ -298,6 +370,14 @@ public sealed class UnitySteamPipeWindow : EditorWindow
 
     private void OnDisable()
     {
+        SteamPipeLan.CommandReceived -=
+            HandleLanCommand;
+
+        SteamPipeLan.DevicesChanged -=
+            Repaint;
+
+        SteamPipeLan.Stop();
+
         SavePrefs();
     }
 
@@ -366,6 +446,43 @@ public sealed class UnitySteamPipeWindow : EditorWindow
         EditorPrefs.SetBool(
             PrefPrefix + "NotifyWhenFinished",
             notifyWhenFinished);
+
+        EditorPrefs.SetBool(
+            PrefPrefix + "LanReceiverEnabled",
+            lanReceiverEnabled);
+
+        EditorPrefs.SetString(
+            PrefPrefix + "LanDeviceName",
+            lanDeviceName);
+
+        EditorPrefs.SetString(
+            PrefPrefix + "LanSharedKey",
+            lanSharedKey);
+
+        EditorPrefs.SetInt(
+            PrefPrefix + "LanCommandPort",
+            lanCommandPort);
+    }
+
+    private void OnInspectorUpdate()
+    {
+        double now =
+            EditorApplication.timeSinceStartup;
+
+        if (now < nextLanDiscoveryTime)
+        {
+            return;
+        }
+
+        nextLanDiscoveryTime =
+            now + 3d;
+
+        SteamPipeLan.Refresh();
+
+        if (SteamPipeLan.GetDevices().Count > 0)
+        {
+            Repaint();
+        }
     }
 
     private void OnGUI()
@@ -402,6 +519,10 @@ public sealed class UnitySteamPipeWindow : EditorWindow
             EditorGUILayout.Space(12);
 
             DrawActions();
+
+            EditorGUILayout.Space(12);
+
+            DrawLanRemote();
         }
 
         EditorGUILayout.Space(16);
@@ -735,6 +856,332 @@ public sealed class UnitySteamPipeWindow : EditorWindow
             {
                 ClearLog();
             }
+        }
+    }
+
+    private void DrawLanRemote()
+    {
+        EditorGUILayout.LabelField(
+            "LAN Remote",
+            EditorStyles.boldLabel);
+
+        EditorGUILayout.HelpBox(
+            "同じLAN上でSteamPipeを開いている端末へ操作を依頼します。受信側は「Allow Remote Requests」を有効にし、両端末で同じShared Keyを設定してください。",
+            MessageType.Info);
+
+        EditorGUI.BeginChangeCheck();
+
+        lanReceiverEnabled =
+            EditorGUILayout.Toggle(
+                "Allow Remote Requests",
+                lanReceiverEnabled);
+
+        lanDeviceName =
+            EditorGUILayout.TextField(
+                "Device Name",
+                lanDeviceName);
+
+        lanSharedKey =
+            EditorGUILayout.PasswordField(
+                "Shared Key",
+                lanSharedKey);
+
+        lanCommandPort =
+            EditorGUILayout.IntField(
+                "Command Port",
+                lanCommandPort);
+
+        lanCommandPort =
+            Mathf.Clamp(
+                lanCommandPort,
+                1024,
+                65535);
+
+        if (EditorGUI.EndChangeCheck())
+        {
+            SavePrefs();
+            ConfigureLanReceiver();
+        }
+
+        if (lanReceiverEnabled &&
+            string.IsNullOrWhiteSpace(
+                lanSharedKey))
+        {
+            EditorGUILayout.HelpBox(
+                "Shared Keyが空のため、リモート要求の受信は開始されていません。",
+                MessageType.Warning);
+        }
+
+        EditorGUILayout.Space(4);
+
+        IReadOnlyList<SteamPipeLanDevice> devices =
+            SteamPipeLan.GetDevices();
+
+        string[] deviceLabels =
+            devices.Count == 0
+                ? new[]
+                {
+                    "デバイスが見つかりません"
+                }
+                : devices
+                    .Select(device =>
+                        device.DisplayName)
+                    .ToArray();
+
+        selectedLanDeviceIndex =
+            Mathf.Clamp(
+                selectedLanDeviceIndex,
+                0,
+                Math.Max(
+                    0,
+                    deviceLabels.Length - 1));
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            selectedLanDeviceIndex =
+                EditorGUILayout.Popup(
+                    "Target Device",
+                    selectedLanDeviceIndex,
+                    deviceLabels);
+
+            if (GUILayout.Button(
+                    "Refresh",
+                    GUILayout.Width(72)))
+            {
+                SteamPipeLan.Refresh();
+                lanRequestStatus =
+                    "LANデバイスを検索しています...";
+            }
+        }
+
+        SteamPipeLanDevice selectedDevice =
+            devices.Count > selectedLanDeviceIndex
+                ? devices[selectedLanDeviceIndex]
+                : null;
+
+        if (selectedDevice != null)
+        {
+            EditorGUILayout.LabelField(
+                "Address",
+                $"{selectedDevice.Address}:{selectedDevice.CommandPort}");
+
+            EditorGUILayout.LabelField(
+                "Project",
+                selectedDevice.Project);
+
+            if (!string.IsNullOrWhiteSpace(
+                    selectedDevice.Detail))
+            {
+                EditorGUILayout.LabelField(
+                    "Remote Status",
+                    selectedDevice.Detail);
+            }
+        }
+
+        bool canRequest =
+            selectedDevice != null &&
+            !string.IsNullOrWhiteSpace(
+                lanSharedKey);
+
+        using (new EditorGUI.DisabledScope(
+                   !canRequest))
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button(
+                        "Git Fetch",
+                        GUILayout.Height(30)))
+                {
+                    SendLanCommand(
+                        selectedDevice,
+                        "git-fetch");
+                }
+
+                if (GUILayout.Button(
+                        "Git Pull",
+                        GUILayout.Height(30)))
+                {
+                    SendLanCommand(
+                        selectedDevice,
+                        "git-pull");
+                }
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button(
+                        "Build",
+                        GUILayout.Height(34)))
+                {
+                    SendLanCommand(
+                        selectedDevice,
+                        "build");
+                }
+
+                if (GUILayout.Button(
+                        "Upload",
+                        GUILayout.Height(34)))
+                {
+                    SendLanCommand(
+                        selectedDevice,
+                        "upload");
+                }
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                lanRequestStatus))
+        {
+            EditorGUILayout.HelpBox(
+                lanRequestStatus,
+                MessageType.None);
+        }
+    }
+
+    private void ConfigureLanReceiver()
+    {
+        SteamPipeLan.ConfigureReceiver(
+            lanReceiverEnabled,
+            lanDeviceName,
+            lanSharedKey,
+            lanCommandPort);
+    }
+
+    private async void SendLanCommand(
+        SteamPipeLanDevice device,
+        string action)
+    {
+        lanRequestStatus =
+            $"{device.Name}へ{GetLanActionLabel(action)}を送信中...";
+
+        Repaint();
+
+        string response =
+            await SteamPipeLan.SendCommandAsync(
+                device,
+                action,
+                lanSharedKey);
+
+        lanRequestStatus =
+            $"{device.Name}: {response}";
+
+        SteamPipeLan.Refresh();
+        Repaint();
+    }
+
+    private async void HandleLanCommand(
+        string action)
+    {
+        string actionLabel =
+            GetLanActionLabel(action);
+
+        if (isBusy)
+        {
+            AppendLog(
+                $"LAN request rejected because SteamPipe is busy: {actionLabel}");
+
+            SteamPipeLan.SetLocalStatus(
+                "Failed",
+                $"{actionLabel}: SteamPipe is busy.");
+
+            return;
+        }
+
+        ClearLog();
+        AppendLog(
+            $"LAN request received: {actionLabel}");
+
+        isBusy = true;
+
+        SteamPipeLan.SetLocalStatus(
+            "Running",
+            actionLabel);
+
+        Repaint();
+
+        bool succeeded = false;
+
+        try
+        {
+            SavePrefs();
+
+            string projectRoot =
+                Path.GetFullPath(
+                    Path.Combine(
+                        Application.dataPath,
+                        ".."));
+
+            switch (action)
+            {
+                case "git-fetch":
+                    succeeded =
+                        await RunProcessAsync(
+                            "git",
+                            "fetch --all --prune",
+                            projectRoot) == 0;
+                    break;
+
+                case "git-pull":
+                    succeeded =
+                        await RunProcessAsync(
+                            "git",
+                            "pull --ff-only",
+                            projectRoot) == 0;
+                    break;
+
+                case "build":
+                    succeeded =
+                        BuildGame();
+                    break;
+
+                case "upload":
+                    succeeded =
+                        GenerateVdfs() &&
+                        await UploadAsync();
+                    break;
+            }
+        }
+        catch (Exception exception)
+        {
+            AppendLog(
+                $"LAN {actionLabel} failed: {exception.Message}");
+        }
+        finally
+        {
+            isBusy = false;
+
+            SteamPipeLan.SetLocalStatus(
+                succeeded
+                    ? "Success"
+                    : "Failed",
+                actionLabel);
+
+            Repaint();
+            NotifyFinished(
+                $"LAN {actionLabel}",
+                succeeded);
+        }
+    }
+
+    private static string GetLanActionLabel(
+        string action)
+    {
+        switch (action)
+        {
+            case "git-fetch":
+                return "Git Fetch";
+
+            case "git-pull":
+                return "Git Pull";
+
+            case "build":
+                return "Build";
+
+            case "upload":
+                return "Upload";
+
+            default:
+                return action;
         }
     }
 

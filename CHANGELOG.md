@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.1.8] - 2026-09-29
+
+- Discover other Unity SteamPipe editors on the local network.
+- Request Git Fetch, Git Pull, Build, or Upload on a selected remote device.
+- Require an explicitly enabled receiver and a matching shared key for remote commands.
+
 ## [0.1.7] - 2026-09-29
 
 - Confirm SteamCMD exit code 6 uploads when a new BuildID appears in the SteamPipe BuildOutput logs.
