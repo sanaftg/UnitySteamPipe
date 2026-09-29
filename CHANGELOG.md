@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.1.7] - 2026-09-29
+
+- Confirm SteamCMD exit code 6 uploads when a new BuildID appears in the SteamPipe BuildOutput logs.
+- Do not accept a console success phrase when the same output explicitly reports a failed build commit.
+
 ## [0.1.6] - 2026-09-24
 
 - Refresh the generated Steam build description after a successful Unity build.

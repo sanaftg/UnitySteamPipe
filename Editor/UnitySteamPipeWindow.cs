@@ -1198,6 +1198,9 @@ $@"""AppBuild""
         var steamCmdOutput =
             new StringBuilder();
 
+        HashSet<string> knownBuildIds =
+            GetKnownBuildIdsFromOutputLogs();
+
         DateTime uploadStartedUtc =
             DateTime.UtcNow;
 
@@ -1235,7 +1238,12 @@ $@"""AppBuild""
 
         if (exitCode == 6)
         {
-            if (OutputConfirmsCompletedBuild(
+            bool reportsCommitFailure =
+                OutputReportsCommitFailure(
+                    capturedOutput);
+
+            if (!reportsCommitFailure &&
+                OutputConfirmsCompletedBuild(
                     capturedOutput))
             {
                 AppendLog(
@@ -1245,13 +1253,14 @@ $@"""AppBuild""
                 return true;
             }
 
-            if (TryConfirmCompletedBuildFromOutputLogs(
+            if (TryConfirmNewBuildFromOutputLogs(
                     uploadStartedUtc,
+                    knownBuildIds,
                     out string buildId,
                     out string buildLogPath))
             {
                 AppendLog(
-                    $"SteamPipe upload finished. BuildID {buildId} " +
+                    $"SteamPipe upload finished. New BuildID {buildId} " +
                     "was confirmed in the SteamPipe BuildOutput log " +
                     $"despite SteamCMD exit code 6: {buildLogPath}");
 
@@ -1292,8 +1301,75 @@ $@"""AppBuild""
                 StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
-    private bool TryConfirmCompletedBuildFromOutputLogs(
+    private static bool OutputReportsCommitFailure(
+        string output)
+    {
+        return
+            !string.IsNullOrWhiteSpace(output)
+            &&
+            output.IndexOf(
+                "failed to commit build",
+                StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private HashSet<string> GetKnownBuildIdsFromOutputLogs()
+    {
+        var buildIds =
+            new HashSet<string>(
+                StringComparer.Ordinal);
+
+        if (!Directory.Exists(OutputPath) ||
+            string.IsNullOrWhiteSpace(appId))
+        {
+            return buildIds;
+        }
+
+        string[] paths;
+
+        try
+        {
+            paths =
+                Directory.EnumerateFiles(
+                    OutputPath,
+                    "*",
+                    SearchOption.AllDirectories)
+                .ToArray();
+        }
+        catch
+        {
+            return buildIds;
+        }
+
+        Regex appIdPattern =
+            CreateAppIdPattern();
+
+        Regex buildIdPattern =
+            CreateBuildIdPattern();
+
+        foreach (string path in paths)
+        {
+            if (!TryReadSharedTextFile(
+                    path,
+                    out string content) ||
+                !appIdPattern.IsMatch(content))
+            {
+                continue;
+            }
+
+            foreach (Match match in
+                     buildIdPattern.Matches(content))
+            {
+                buildIds.Add(
+                    match.Groups[1].Value);
+            }
+        }
+
+        return buildIds;
+    }
+
+    private bool TryConfirmNewBuildFromOutputLogs(
         DateTime uploadStartedUtc,
+        HashSet<string> knownBuildIds,
         out string buildId,
         out string buildLogPath)
     {
@@ -1334,70 +1410,96 @@ $@"""AppBuild""
             return false;
         }
 
-        string escapedAppId =
-            Regex.Escape(appId.Trim());
+        Regex appIdPattern =
+            CreateAppIdPattern();
 
-        var appIdPattern =
-            new Regex(
-                $@"\bAppID\s*[:=]?\s*{escapedAppId}\b",
-                RegexOptions.IgnoreCase);
-
-        var buildIdPattern =
-            new Regex(
-                @"\bBuildID\s*[:=]?\s*(\d+)\b",
-                RegexOptions.IgnoreCase);
+        Regex buildIdPattern =
+            CreateBuildIdPattern();
 
         foreach (string path in candidatePaths)
         {
-            string content;
-
-            try
-            {
-                using var stream =
-                    new FileStream(
-                        path,
-                        FileMode.Open,
-                        FileAccess.Read,
-                        FileShare.ReadWrite | FileShare.Delete);
-
-                using var reader =
-                    new StreamReader(
-                        stream,
-                        Encoding.UTF8,
-                        true);
-
-                content =
-                    reader.ReadToEnd();
-            }
-            catch
+            if (!TryReadSharedTextFile(
+                    path,
+                    out string content) ||
+                !appIdPattern.IsMatch(content))
             {
                 continue;
             }
 
-            if (!appIdPattern.IsMatch(content) ||
-                !OutputConfirmsCompletedBuild(content))
+            foreach (Match match in
+                     buildIdPattern.Matches(content))
             {
-                continue;
+                string candidateBuildId =
+                    match.Groups[1].Value;
+
+                if (knownBuildIds.Contains(
+                        candidateBuildId))
+                {
+                    continue;
+                }
+
+                buildId =
+                    candidateBuildId;
+
+                buildLogPath =
+                    path;
+
+                return true;
             }
-
-            Match buildIdMatch =
-                buildIdPattern.Match(content);
-
-            if (!buildIdMatch.Success)
-            {
-                continue;
-            }
-
-            buildId =
-                buildIdMatch.Groups[1].Value;
-
-            buildLogPath =
-                path;
-
-            return true;
         }
 
         return false;
+    }
+
+    private Regex CreateAppIdPattern()
+    {
+        string escapedAppId =
+            Regex.Escape(appId.Trim());
+
+        return
+            new Regex(
+                $@"\bAppID\s*[:=]?\s*{escapedAppId}\b",
+                RegexOptions.IgnoreCase);
+    }
+
+    private static Regex CreateBuildIdPattern()
+    {
+        return
+            new Regex(
+                @"\bBuildID\s*[:=]?\s*(\d+)\b",
+                RegexOptions.IgnoreCase);
+    }
+
+    private static bool TryReadSharedTextFile(
+        string path,
+        out string content)
+    {
+        content = string.Empty;
+
+        try
+        {
+            using var stream =
+                new FileStream(
+                    path,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete);
+
+            using var reader =
+                new StreamReader(
+                    stream,
+                    Encoding.UTF8,
+                    true);
+
+            content =
+                reader.ReadToEnd();
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task<bool> SignAndNotarizeMacBuildAsync()
