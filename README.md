@@ -26,7 +26,7 @@ https://github.com/sanaftg/UnitySteamPipe.git
 
 ### LAN Remote
 
-同じLANでSteamPipeウィンドウを開いている別端末へ、Git Fetch、Git Pull、Build、Uploadを依頼できます。
+同じLANでSteamPipeウィンドウを開いている別端末へ、Git Fetch、Git Pull、Full Pipelineを依頼できます。Full Pipelineはビルドからアップロードまでを実行し、macOSでは署名・公証を含み、Windowsではそれらを自動的にスキップします。
 
 1. 受信側で `Allow Remote Requests` を有効にします。
 2. 両端末の `Shared Key` を同じ値に設定します。

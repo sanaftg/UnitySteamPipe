@@ -1059,25 +1059,13 @@ public sealed class UnitySteamPipeWindow : EditorWindow
                 }
             }
 
-            using (new EditorGUILayout.HorizontalScope())
+            if (GUILayout.Button(
+                    "FULL PIPELINE",
+                    GUILayout.Height(40)))
             {
-                if (GUILayout.Button(
-                        "Build",
-                        GUILayout.Height(34)))
-                {
-                    SendLanCommand(
-                        selectedDevice,
-                        "build");
-                }
-
-                if (GUILayout.Button(
-                        "Upload",
-                        GUILayout.Height(34)))
-                {
-                    SendLanCommand(
-                        selectedDevice,
-                        "upload");
-                }
+                SendLanCommand(
+                    selectedDevice,
+                    "full-pipeline");
             }
         }
 
@@ -1233,15 +1221,9 @@ public sealed class UnitySteamPipeWindow : EditorWindow
                             projectRoot);
                     break;
 
-                case "build":
+                case "full-pipeline":
                     succeeded =
-                        BuildGame();
-                    break;
-
-                case "upload":
-                    succeeded =
-                        GenerateVdfs() &&
-                        await UploadAsync();
+                        await RunCompletePipelineAsync();
                     break;
             }
         }
@@ -1305,11 +1287,8 @@ public sealed class UnitySteamPipeWindow : EditorWindow
             case "git-pull":
                 return "Git Pull";
 
-            case "build":
-                return "Build";
-
-            case "upload":
-                return "Upload";
+            case "full-pipeline":
+                return "Full Pipeline";
 
             default:
                 return action;
@@ -1709,32 +1688,8 @@ $@"""AppBuild""
 
         try
         {
-            if (!BuildGame())
-            {
-                return;
-            }
-
-            if (IsMacBuild)
-            {
-                if (!ValidateMacSigningSettings())
-                {
-                    return;
-                }
-
-                if (!await SignAndNotarizeMacBuildAsync())
-                {
-                    return;
-                }
-            }
-
-            if (!GenerateVdfs())
-            {
-                return;
-            }
-
-            SavePrefs();
-
-            succeeded = await UploadAsync();
+            succeeded =
+                await RunCompletePipelineAsync();
         }
         catch (Exception ex)
         {
@@ -1749,6 +1704,36 @@ $@"""AppBuild""
             Repaint();
             NotifyFinished("SteamPipe Pipeline", succeeded);
         }
+    }
+
+    private async Task<bool> RunCompletePipelineAsync()
+    {
+        if (!BuildGame())
+        {
+            return false;
+        }
+
+        if (IsMacBuild)
+        {
+            if (!ValidateMacSigningSettings())
+            {
+                return false;
+            }
+
+            if (!await SignAndNotarizeMacBuildAsync())
+            {
+                return false;
+            }
+        }
+
+        if (!GenerateVdfs())
+        {
+            return false;
+        }
+
+        SavePrefs();
+
+        return await UploadAsync();
     }
 
     private async Task<bool> UploadAsync()

@@ -736,9 +736,7 @@ internal static class SteamPipeLan
             ||
             action == "git-pull"
             ||
-            action == "build"
-            ||
-            action == "upload"
+            action == "full-pipeline"
             ||
             action == "get-log";
     }

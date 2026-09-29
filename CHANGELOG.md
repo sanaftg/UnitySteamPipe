@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.1.11] - 2026-09-30
+
+- Replace separate remote Build and Upload actions with one Full Pipeline action.
+- Run build, macOS signing/notarization when applicable, VDF generation, and upload as one shared pipeline.
+- Skip signing and notarization automatically for Windows targets.
+
 ## [0.1.10] - 2026-09-30
 
 - Show the selected remote SteamPipe device's live log in the LAN Remote section.
