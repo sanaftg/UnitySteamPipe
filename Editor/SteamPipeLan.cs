@@ -59,6 +59,7 @@ internal static class SteamPipeLan
     private static int commandPort = 43818;
     private static string localState = "Idle";
     private static string localDetail = "";
+    private static string localLog = "";
 
     public static event Action<string> CommandReceived;
     public static event Action DevicesChanged;
@@ -208,6 +209,27 @@ internal static class SteamPipeLan
 
         localDetail =
             detail ?? "";
+    }
+
+    public static void SetLocalLog(
+        string value)
+    {
+        const int maxLogCharacters = 16000;
+
+        string snapshot =
+            value ?? "";
+
+        if (snapshot.Length >
+            maxLogCharacters)
+        {
+            snapshot =
+                snapshot.Substring(
+                    snapshot.Length -
+                    maxLogCharacters);
+        }
+
+        localLog =
+            snapshot;
     }
 
     public static async Task<string> SendCommandAsync(
@@ -671,6 +693,16 @@ internal static class SteamPipeLan
                     return;
                 }
 
+                if (action == "get-log")
+                {
+                    await WriteResponseAsync(
+                        writer,
+                        true,
+                        localLog);
+
+                    return;
+                }
+
                 await WriteResponseAsync(
                     writer,
                     true,
@@ -706,7 +738,9 @@ internal static class SteamPipeLan
             ||
             action == "build"
             ||
-            action == "upload";
+            action == "upload"
+            ||
+            action == "get-log";
     }
 
     private static void StopReceiver()

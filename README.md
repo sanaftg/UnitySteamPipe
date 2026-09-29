@@ -36,6 +36,8 @@ https://github.com/sanaftg/UnitySteamPipe.git
 
 LAN経由のGit操作は非対話実行のためGitHub SSH認証を使用します。各受信端末でSSHキーをGitHubへ登録し、`ssh -T git@github.com`が成功する状態にしてください。リポジトリの`origin`設定自体は変更しません。
 
+選択中の端末のSteamPipeログは`Remote Log`へ表示され、実行中は1秒間隔で更新されます。ログ取得にもShared Key認証が必要です。
+
 ### macOS
 
 macOS版ではDeveloper ID Application証明書と、`notarytool store-credentials` で作成したKeychain Profileが必要です。付属の `Editor/Steam/Steam.entitlements` を初期値として使用します。

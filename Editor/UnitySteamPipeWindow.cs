@@ -113,7 +113,11 @@ public sealed class UnitySteamPipeWindow : EditorWindow
     private Vector2 scroll;
     private int selectedLanDeviceIndex;
     private string lanRequestStatus = "";
+    private string remoteLanLog = "";
+    private string remoteLanLogDeviceId = "";
+    private bool requestingRemoteLanLog;
     private double nextLanDiscoveryTime;
+    private double nextLanLogPollTime;
     private string logText = "";
     private bool isBusy;
 
@@ -342,6 +346,9 @@ public sealed class UnitySteamPipeWindow : EditorWindow
 
         ConfigureLanReceiver();
 
+        SteamPipeLan.SetLocalLog(
+            logText);
+
         EditorApplication.delayCall +=
             SteamPipeLan.Refresh;
     }
@@ -469,19 +476,25 @@ public sealed class UnitySteamPipeWindow : EditorWindow
         double now =
             EditorApplication.timeSinceStartup;
 
-        if (now < nextLanDiscoveryTime)
+        if (now >= nextLanDiscoveryTime)
         {
-            return;
+            nextLanDiscoveryTime =
+                now + 3d;
+
+            SteamPipeLan.Refresh();
+
+            if (SteamPipeLan.GetDevices().Count > 0)
+            {
+                Repaint();
+            }
         }
 
-        nextLanDiscoveryTime =
-            now + 3d;
-
-        SteamPipeLan.Refresh();
-
-        if (SteamPipeLan.GetDevices().Count > 0)
+        if (now >= nextLanLogPollTime)
         {
-            Repaint();
+            nextLanLogPollTime =
+                now + 1d;
+
+            RefreshSelectedLanLog();
         }
     }
 
@@ -961,6 +974,18 @@ public sealed class UnitySteamPipeWindow : EditorWindow
 
         if (selectedDevice != null)
         {
+            if (!string.Equals(
+                    remoteLanLogDeviceId,
+                    selectedDevice.Id,
+                    StringComparison.Ordinal))
+            {
+                remoteLanLogDeviceId =
+                    selectedDevice.Id;
+
+                remoteLanLog = "";
+                nextLanLogPollTime = 0d;
+            }
+
             EditorGUILayout.LabelField(
                 "Address",
                 $"{selectedDevice.Address}:{selectedDevice.CommandPort}");
@@ -976,6 +1001,33 @@ public sealed class UnitySteamPipeWindow : EditorWindow
                     "Remote Status",
                     selectedDevice.Detail);
             }
+
+            EditorGUILayout.Space(4);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField(
+                    "Remote Log",
+                    EditorStyles.boldLabel);
+
+                if (GUILayout.Button(
+                        "Refresh Log",
+                        GUILayout.Width(88)))
+                {
+                    nextLanLogPollTime = 0d;
+                    RefreshSelectedLanLog();
+                }
+            }
+
+            remoteLanLog =
+                EditorGUILayout.TextArea(
+                    remoteLanLog,
+                    GUILayout.MinHeight(140));
+        }
+        else
+        {
+            remoteLanLogDeviceId = "";
+            remoteLanLog = "";
         }
 
         bool canRequest =
@@ -1047,6 +1099,59 @@ public sealed class UnitySteamPipeWindow : EditorWindow
             lanCommandPort);
     }
 
+    private async void RefreshSelectedLanLog()
+    {
+        if (requestingRemoteLanLog ||
+            string.IsNullOrWhiteSpace(
+                lanSharedKey))
+        {
+            return;
+        }
+
+        IReadOnlyList<SteamPipeLanDevice> devices =
+            SteamPipeLan.GetDevices();
+
+        if (devices.Count == 0)
+        {
+            return;
+        }
+
+        int index =
+            Mathf.Clamp(
+                selectedLanDeviceIndex,
+                0,
+                devices.Count - 1);
+
+        SteamPipeLanDevice device =
+            devices[index];
+
+        requestingRemoteLanLog = true;
+
+        try
+        {
+            string log =
+                await SteamPipeLan.SendCommandAsync(
+                    device,
+                    "get-log",
+                    lanSharedKey);
+
+            if (string.Equals(
+                    remoteLanLogDeviceId,
+                    device.Id,
+                    StringComparison.Ordinal))
+            {
+                remoteLanLog =
+                    log;
+
+                Repaint();
+            }
+        }
+        finally
+        {
+            requestingRemoteLanLog = false;
+        }
+    }
+
     private async void SendLanCommand(
         SteamPipeLanDevice device,
         string action)
@@ -1065,6 +1170,7 @@ public sealed class UnitySteamPipeWindow : EditorWindow
         lanRequestStatus =
             $"{device.Name}: {response}";
 
+        nextLanLogPollTime = 0d;
         SteamPipeLan.Refresh();
         Repaint();
     }
@@ -2785,6 +2891,9 @@ $@"""AppBuild""
     {
         logText = "";
 
+        SteamPipeLan.SetLocalLog(
+            logText);
+
         Repaint();
     }
 
@@ -2797,6 +2906,9 @@ $@"""AppBuild""
         logText +=
             line +
             Environment.NewLine;
+
+        SteamPipeLan.SetLocalLog(
+            logText);
 
         Debug.Log(
             "[SteamPipe] " +

@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.1.10] - 2026-09-30
+
+- Show the selected remote SteamPipe device's live log in the LAN Remote section.
+- Poll authenticated remote logs once per second and limit transferred log history to the latest 16,000 characters.
+
 ## [0.1.9] - 2026-09-30
 
 - Run LAN-requested Git Fetch and Git Pull through GitHub SSH authentication without changing the configured origin URL.
