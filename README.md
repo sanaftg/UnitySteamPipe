@@ -38,6 +38,8 @@ LAN経由のGit操作は非対話実行のためGitHub SSH認証を使用しま�
 
 選択中の端末のSteamPipeログは`Remote Log`へ表示され、実行中は1秒間隔で更新されます。ログ取得にもShared Key認証が必要です。
 
+Git Pull成功後はUnityのAssetDatabaseを強制更新します。Full Pipelineはアセットインポートとスクリプトコンパイルの完了を待ってからビルドを開始します。
+
 ### macOS
 
 macOS版ではDeveloper ID Application証明書と、`notarytool store-credentials` で作成したKeychain Profileが必要です。付属の `Editor/Steam/Steam.entitlements` を初期値として使用します。

@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.1.12] - 2026-09-30
+
+- Force a synchronous Unity asset refresh after a successful LAN Git Pull.
+- Wait for asset import and script compilation to finish before starting Full Pipeline.
+- Report the compilation wait state through LAN status and remote logs.
+
 ## [0.1.11] - 2026-09-30
 
 - Replace separate remote Build and Upload actions with one Full Pipeline action.

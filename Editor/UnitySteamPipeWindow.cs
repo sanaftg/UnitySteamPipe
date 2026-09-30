@@ -1273,6 +1273,22 @@ public sealed class UnitySteamPipeWindow : EditorWindow
                 "and that 'ssh -T git@github.com' succeeds.");
         }
 
+        if (exitCode == 0 &&
+            arguments.StartsWith(
+                "pull",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            AppendLog(
+                "Git Pull finished. Refreshing Unity assets and scripts...");
+
+            AssetDatabase.Refresh(
+                ImportAssetOptions.ForceUpdate |
+                ImportAssetOptions.ForceSynchronousImport);
+
+            AppendLog(
+                "Unity asset refresh requested. Script changes will be compiled before the next pipeline.");
+        }
+
         return exitCode == 0;
     }
 
@@ -1708,6 +1724,11 @@ $@"""AppBuild""
 
     private async Task<bool> RunCompletePipelineAsync()
     {
+        if (!await WaitForEditorReadyAsync())
+        {
+            return false;
+        }
+
         if (!BuildGame())
         {
             return false;
@@ -1734,6 +1755,48 @@ $@"""AppBuild""
         SavePrefs();
 
         return await UploadAsync();
+    }
+
+    private async Task<bool> WaitForEditorReadyAsync()
+    {
+        DateTime timeoutUtc =
+            DateTime.UtcNow.AddMinutes(5d);
+
+        bool waitLogged = false;
+
+        while (EditorApplication.isCompiling ||
+               EditorApplication.isUpdating)
+        {
+            if (!waitLogged)
+            {
+                AppendLog(
+                    "Waiting for Unity asset import and script compilation...");
+
+                SteamPipeLan.SetLocalStatus(
+                    "Waiting",
+                    "Unity compilation");
+
+                waitLogged = true;
+            }
+
+            if (DateTime.UtcNow >= timeoutUtc)
+            {
+                AppendLog(
+                    "Timed out waiting for Unity compilation.");
+
+                return false;
+            }
+
+            await Task.Delay(250);
+        }
+
+        if (waitLogged)
+        {
+            AppendLog(
+                "Unity compilation finished. Starting Full Pipeline.");
+        }
+
+        return true;
     }
 
     private async Task<bool> UploadAsync()
