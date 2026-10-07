@@ -111,6 +111,8 @@ public sealed class UnitySteamPipeWindow : EditorWindow
     private int lanCommandPort = 43818;
 
     private Vector2 scroll;
+    private Vector2 localLogScroll;
+    private Vector2 remoteLanLogScroll;
     private int selectedLanDeviceIndex;
     private string lanRequestStatus = "";
     private string remoteLanLog = "";
@@ -544,11 +546,11 @@ public sealed class UnitySteamPipeWindow : EditorWindow
             "Log",
             EditorStyles.boldLabel);
 
-        logText =
-            EditorGUILayout.TextArea(
+        localLogScroll =
+            DrawScrollableLog(
                 logText,
-                GUILayout.MinHeight(180),
-                GUILayout.ExpandHeight(true));
+                localLogScroll,
+                180f);
 
         scroll = scrollView.scrollPosition;
     }
@@ -983,6 +985,7 @@ public sealed class UnitySteamPipeWindow : EditorWindow
                     selectedDevice.Id;
 
                 remoteLanLog = "";
+                remoteLanLogScroll = Vector2.zero;
                 nextLanLogPollTime = 0d;
             }
 
@@ -1019,15 +1022,17 @@ public sealed class UnitySteamPipeWindow : EditorWindow
                 }
             }
 
-            remoteLanLog =
-                EditorGUILayout.TextArea(
+            remoteLanLogScroll =
+                DrawScrollableLog(
                     remoteLanLog,
-                    GUILayout.MinHeight(140));
+                    remoteLanLogScroll,
+                    160f);
         }
         else
         {
             remoteLanLogDeviceId = "";
             remoteLanLog = "";
+            remoteLanLogScroll = Vector2.zero;
         }
 
         bool canRequest =
@@ -1126,10 +1131,17 @@ public sealed class UnitySteamPipeWindow : EditorWindow
             if (string.Equals(
                     remoteLanLogDeviceId,
                     device.Id,
+                    StringComparison.Ordinal) &&
+                !string.Equals(
+                    remoteLanLog,
+                    log,
                     StringComparison.Ordinal))
             {
                 remoteLanLog =
                     log;
+
+                remoteLanLogScroll.y =
+                    float.MaxValue;
 
                 Repaint();
             }
@@ -1309,6 +1321,46 @@ public sealed class UnitySteamPipeWindow : EditorWindow
             default:
                 return action;
         }
+    }
+
+    private Vector2 DrawScrollableLog(
+        string text,
+        Vector2 scrollPosition,
+        float height)
+    {
+        var style =
+            new GUIStyle(
+                EditorStyles.textArea)
+            {
+                wordWrap = true
+            };
+
+        float contentWidth =
+            Mathf.Max(
+                200f,
+                position.width - 72f);
+
+        float contentHeight =
+            Mathf.Max(
+                height - 8f,
+                style.CalcHeight(
+                    new GUIContent(
+                        text ?? ""),
+                    contentWidth));
+
+        using var logScroll =
+            new EditorGUILayout.ScrollViewScope(
+                scrollPosition,
+                GUILayout.Height(height),
+                GUILayout.ExpandWidth(true));
+
+        EditorGUILayout.SelectableLabel(
+            text ?? "",
+            style,
+            GUILayout.Height(contentHeight),
+            GUILayout.ExpandWidth(true));
+
+        return logScroll.scrollPosition;
     }
 
     private void DrawFolderField(
@@ -2938,6 +2990,7 @@ $@"""AppBuild""
     private void ClearLog()
     {
         logText = "";
+        localLogScroll = Vector2.zero;
 
         SteamPipeLan.SetLocalLog(
             logText);
@@ -2957,6 +3010,9 @@ $@"""AppBuild""
 
         SteamPipeLan.SetLocalLog(
             logText);
+
+        localLogScroll.y =
+            float.MaxValue;
 
         Debug.Log(
             "[SteamPipe] " +

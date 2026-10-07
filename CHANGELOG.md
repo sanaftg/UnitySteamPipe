@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.1.13] - 2026-10-07
+
+- Keep local and remote log panels at a fixed height with dedicated scrollbars.
+- Automatically follow the latest line whenever new log output arrives.
+- Preserve text selection and copying while preventing log fields from growing indefinitely.
+
 ## [0.1.12] - 2026-09-30
 
 - Force a synchronous Unity asset refresh after a successful LAN Git Pull.
